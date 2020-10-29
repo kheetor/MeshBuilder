@@ -26,8 +26,6 @@ public class MeshBuilder {
             this.i = i;
             this.l = (p2 - p4).magnitude;
             this.angle = Vector3.Angle(p3 - p2, p3 - p4);
-            //this.angle -= Vector3.Angle(p2 - p3, p2 - p1);
-            //this.angle -= Vector3.Angle(p4 - p3, p4 - p5);
         }
     }
 
@@ -61,22 +59,23 @@ public class MeshBuilder {
             mesh.SetTriangles(subMeshes[i].tris.ToArray(), i);
         }
 
+        //temporary disabled in place of Unity native auto normals
         //mesh.normals = normals.ToArray();
-
         mesh.RecalculateNormals();
+
         mesh.RecalculateTangents();
-        /*
+
+        /* Enable if you need lightmap uvs
         UnwrapParam unw = new UnwrapParam();
         unw.angleError = 0.5f;
         unw.areaError = 0.1f;
         unw.hardAngle = 45f;
         unw.packMargin = 0.02f;
         Unwrapping.GenerateSecondaryUVSet(mesh, unw);
-
-        EditorUtility.SetDirty(mesh);
         */
     }
 
+    // Ear vert is the vertex that should be next patched out of ngon hole by a new triangle
     private int FindEar(List<Vector2> hole) {
         if (hole.Count == 3)
             return 0;
@@ -95,8 +94,6 @@ public class MeshBuilder {
         }
 
         earVerts.Sort((x, y) => x.l.CompareTo(y.l));
-
-        //Debug.Log("best earvert at " + earVerts[0].i.ToString() + " : " + hole[earVerts[0].i].ToString());
 
         for (int index = 0; index < hole.Count; index++) {
 
@@ -147,6 +144,8 @@ public class MeshBuilder {
             }
         }
 
+        // if code reaches here something is probably wrong with the mesh data since
+        // no suitable earvert was found
         Debug.LogWarning("Unoptimal poly");
         return 0;
     }
@@ -163,11 +162,6 @@ public class MeshBuilder {
         return subMeshes.Count - 1;
     }
 
-    private void AddVerts(List<Vector3> points) {
-        Quaternion rot = Quaternion.AngleAxis(90f, points[2] - points[0]);
-        AddVerts(points, rot * (points[1] - points[0]));
-    }
-
     private void AddVerts(List<Vector3> points, Vector3 normal) {
         verts.AddRange(points);
         if (uvMode == MeshUVMode.uvTransform && uvTransform != null) {
@@ -176,6 +170,12 @@ public class MeshBuilder {
                 normals.Add(normal);
             }
         }
+    }
+
+    // If no normal is given the system tries to find it based on the verts
+    private void AddVerts(List<Vector3> points) {
+        Quaternion rot = Quaternion.AngleAxis(90f, points[2] - points[0]);
+        AddVerts(points, rot * (points[1] - points[0]));
     }
 
     private void AddVert(Vector3 point, Vector3 normal) {
@@ -273,6 +273,7 @@ public class MeshBuilder {
         }
     }
 
+    // mesh raycasting helper function
     public bool TryFindContainsTri(Vector3 point, Matrix4x4 ps, out int index) {
         List<Vector2> tri = new List<Vector2>();
         point = ps * point;
@@ -345,6 +346,7 @@ public class MeshBuilder {
         return false;
     }
 
+    // Split triangle by point
     public void TriSplitByPoint(Vector3 point, Vector3 normal) {
         // Find triangle that contains point
         int ti;
@@ -374,6 +376,7 @@ public class MeshBuilder {
         }
     }
 
+    // This processes the quads until the tris are optimally oriented
     public void RotUntilDelaulay() {
         SubMesh sm = GetSubMesh(activeSubmesh);
         bool unoptimal = true;
@@ -415,14 +418,11 @@ public class MeshBuilder {
         return false;
     }
 
+    // Add N-gon, normal is used to determine projection plane since the N-gon algorithm works consistently only in 2D
     public void PolyAdd(List<Vector3> points, Vector3 normal, bool flip = false) {
         // for finding Ngon ears and using point in poly formula we are
         // constructing matrix which translates points from mesh space to poly space
         Matrix4x4 ps = Matrix4x4.TRS(points[0], Quaternion.LookRotation(normal, points[1] - points[0]), Vector3.one);
-        //Debug.Log("adding poly ");
-        for (int i = 0; i < points.Count; i++) {
-            //Debug.Log(points[i]);
-        }
 
         // add points to mesh verts
         int vOffset = verts.Count;
